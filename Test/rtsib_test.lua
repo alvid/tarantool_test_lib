@@ -20,7 +20,7 @@ fiber = require("fiber")
 rtsib = require("rtsib")
 log = require("log")
 
-rpc = require("RemoteInstanceConnection").RemoteInstanceConnection("127.0.0.1:3302")
+--rpc = require("RemoteInstanceConnection").RemoteInstanceConnection("127.0.0.1:3302")
 
 orderNum = 0
 
@@ -52,7 +52,7 @@ function onRequestFiber(request)
 end
 
 function onRequestFiberCond(request)
-    print("onRequestFiberCond("..tostring(request)..") called")
+    --print("onRequestFiberCond("..tostring(request)..") called")
 
     local name = "rtsib_test: onRequestFiberCond #" .. tostring(request)
     print(name .. ": run(" .. request .. ")")
@@ -67,11 +67,11 @@ function onRequestFiberCond(request)
 
     print(name .. ": wait for cond")
     local res = fc:wait(7)
-    if res then
-        print(name .. ": cond signalled")
-    else
-        print(name .. ": cond timeout")
-    end
+    --if res then
+    --    print(name .. ": cond signalled")
+    --else
+    --    print(name .. ": cond timeout")
+    --end
 
     print(name .. ": return " .. request)
     return request
@@ -91,7 +91,7 @@ end
 
 --rtsib.create_server("trnl", "onRequestSync") -- all's good
 --rtsib.create_server("trnl", "onRequestFiber") -- all's good
-rtsib.create_server("trnl", "onRequestFiberCond") -- condition timeout?!
+rtsib.create_server("trnl", "onRequestFiberCond")
 --rtsib.create_server("trnl", "onRequestPcall") -- all's good
 
 disp_fiber = fiber.create(function ()
