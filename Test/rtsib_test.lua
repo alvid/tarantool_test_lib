@@ -4,13 +4,21 @@
 --- DateTime: 15.12.2020 17:09
 ---
 
+data_dir = "data"
+
 box.cfg({
-    log_level = 5
-})
+    log_level    = 7
+    --, log        = 'rtsib_test_log.txt'
+    , wal_dir    = data_dir
+    , memtx_dir  = data_dir
+    , vinyl_dir  = data_dir
+    })
+
 box.schema.sequence.create('oms_order_sqn', {if_not_exists = true})
 
 fiber = require("fiber")
 rtsib = require("rtsib")
+log = require("log")
 
 rpc = require("RemoteInstanceConnection").RemoteInstanceConnection("127.0.0.1:3302")
 
@@ -18,7 +26,7 @@ orderNum = 0
 
 function onRequestSync(request)
     print("onRequestSync("..tostring(request)..") called")
-    return request + 100
+    return request + 1000
 end
 
 function onRequestFiber(request)
@@ -27,12 +35,11 @@ function onRequestFiber(request)
 
     local n = orderNum
     local name = "rtsib_test: onRequestFiber #" .. tostring(n)
-    print(name .. ": run")
+    print(name .. ": run(" .. request .. ")")
 
     local f = fiber.new(function()
         print(name .. ": fiber run")
         local seqno = box.sequence.oms_order_sqn:next()
-        --fiber.sleep(0)
         print(name .. ": fiber end(" .. seqno .. ")")
         return seqno
     end)
@@ -46,15 +53,14 @@ end
 
 function onRequestFiberCond(request)
     print("onRequestFiberCond("..tostring(request)..") called")
-    orderNum = orderNum + 1
 
-    local n = orderNum
-    local name = "rtsib_test: onRequestFiberCond #" .. tostring(n)
-    print(name .. ": run")
+    local name = "rtsib_test: onRequestFiberCond #" .. tostring(request)
+    print(name .. ": run(" .. request .. ")")
     local fc = fiber.cond()
 
     local f = fiber.create(function()
         print(name .. ": fiber run")
+        fiber.sleep(0)
         fc:signal()
         print(name .. ": fiber end")
     end)
@@ -67,8 +73,8 @@ function onRequestFiberCond(request)
         print(name .. ": cond timeout")
     end
 
-    print(name .. ": end")
-    return n
+    print(name .. ": return " .. request)
+    return request
 end
 
 ---crashes

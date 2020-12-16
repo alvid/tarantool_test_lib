@@ -65,20 +65,21 @@ int RTSIB_Server::on_incoming_request()
 
     auto L = luaT_state();
 
-    printf("RTSIB_Server::on_incoming_request(event = %p): >> call %s()\n",
-           cur_event.get(), lua_callback.c_str());
     lua_getglobal(L, lua_callback.c_str());
     lua_pushnumber(L, cur_event->request_id);
+    printf("RTSIB_Server::on_incoming_request(event = %p): >> call %s(%d)\n",
+           cur_event.get(), lua_callback.c_str(), cur_event->request_id);
     auto rc = lua_pcall(L, 1, 1, 0);
     if (rc) {
         fprintf(stderr, "error running function '%s': %s\n", lua_callback.c_str(), lua_tostring(L, -1));
+        lua_pop(L, 1);
         return -1;
-        //error(L, "error running function '%s': %s", lua_callback.c_str(), lua_tostring(L, -1));
     }
-    auto response_id = lua_tonumber(L, -1);
+    assert(lua_isnumber(L, -1));
+    auto response_id = lua_tointeger(L, -1);
+    printf("RTSIB_Server::on_incoming_request(event = %p): << %s() return %d, wait %d\n",
+            cur_event.get(), lua_callback.c_str(), response_id, cur_event->request_id);
     lua_pop(L, 1);
-    printf("RTSIB_Server::on_incoming_request(event = %p): << call %s() = %d\n",
-            cur_event.get(), lua_callback.c_str(), response_id);
 
     return 0;
 }

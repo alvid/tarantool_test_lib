@@ -5,6 +5,8 @@
 
 #include <queue>
 #include <cstdlib>
+#include <thread>
+#include <chrono>
 
 #include "lua.hpp"
 #include "tarantool/module.h"
@@ -14,6 +16,19 @@
 std::mutex g_mt;
 std::deque<std::shared_ptr<RTSIB_event>> g_mq;
 int g_signal = -1;
+
+#define START_REQUEST_ID 1000
+#define REQUEST_COUNT 1000U
+
+static void thread_proc(int start_request_id, size_t request_count)
+{
+    for (size_t i = 0; i < request_count; ++i) {
+//        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+//        g_rtsib_server->on_request(nullptr, ++start_request_id);
+//        g_rtsib_server->on_request(nullptr, ++start_request_id);
+        g_rtsib_server->on_request(nullptr, ++start_request_id);
+    }
+}
 
 int run_dispatcher_fiber(lua_State *lua)
 {
@@ -26,7 +41,7 @@ int run_dispatcher_fiber(lua_State *lua)
     }
 
     ///tbd: for debug purposes only
-    int req_id = 600;
+    int req_id = 100;
     {
         auto m1 = std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id);
         auto m2 = std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id);
@@ -43,6 +58,8 @@ int run_dispatcher_fiber(lua_State *lua)
         }
     }
     ///tbd: for debug purposes only
+
+    //std::thread t(thread_proc, START_REQUEST_ID, REQUEST_COUNT);
 
     while (true) {
         int rc = coio_wait(g_signal, COIO_READ, 1);
