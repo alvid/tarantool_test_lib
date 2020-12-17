@@ -5,7 +5,7 @@
 #include "Dispatcher_fiber.hpp"
 #include "RTSIB_server.hpp"
 
-static const char *LIB_NAME = "luartsib";
+static const char *LIB_NAME = "rtsib";
 
 #ifdef __cplusplus
 extern "C" {

@@ -3,7 +3,7 @@ cmake_policy(SET CMP0076 NEW)   #prevent absolute source file paths
 
 project(Lua_RTSIB VERSION 1.0.0)
 
-set(LIBNAME luartsib)
+set(LIBNAME rtsib)
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
 	add_definitions(-D_DEBUG)

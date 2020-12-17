@@ -15,7 +15,7 @@ int create_server(lua_State *state)
 {
     std::string port_type(luaL_checkstring(state, 1));
     std::string callback(luaL_checkstring(state, 2));
-    say_info("luartsib: create_server('%s', '%s')", port_type.c_str(), callback.c_str());
+    say_info("rtsib: create_server('%s', '%s')", port_type.c_str(), callback.c_str());
     //for debug purposes only
     if (g_rtsib_server == nullptr) {
         g_rtsib_server = new RTSIB_Server(port_type, callback);
@@ -36,7 +36,7 @@ RTSIB_Server::RTSIB_Server(std::string a_port_type, std::string cb)
     : port_type(std::move(a_port_type))
     , lua_callback(cb)
 {
-    snprintf(log_prefix, sizeof(log_prefix), "luartsib: server('%s'): ", port_type.c_str());
+    snprintf(log_prefix, sizeof(log_prefix), "rtsib: server('%s'): ", port_type.c_str());
     say_info("%s%s", log_prefix, "created");
 }
 
@@ -100,7 +100,7 @@ int RTSIB_Server::on_incoming_request(lua_State *state, int request_id)
     lua_pushnumber(state, request_id);
     printf("RTSIB_Server::on_incoming_request(): >> call %s(%d)\n",
            lua_callback.c_str(), request_id);
-    auto rc = lua_pcall(state, 1, 1, 0);
+    auto rc = luaT_call(state, 1, 1); // lua_pcall(state, 1, 1, 0);
     if (rc) {
         fprintf(stderr, "error running function '%s': %s\n", lua_callback.c_str(), lua_tostring(state, -1));
         lua_pop(state, 1);
@@ -155,7 +155,7 @@ void Incoming_request::process_through_lua()
     lua_pushinteger(state, request_id);
     printf("Incoming_request::process_through_lua(event = %p): >> call %s(%d)\n",
            this, lua_callback.c_str(), request_id);
-    auto rc = lua_pcall(state, 1, 0, 0);
+    auto rc = luaT_call(state, 1, 0); // lua_pcall(state, 1, 0, 0);
     if (rc) {
         fprintf(stderr, "error running function '%s': %s\n",
                 lua_callback.c_str(), lua_tostring(state, -1));
