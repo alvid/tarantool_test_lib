@@ -14,6 +14,7 @@
 struct RTSIB_event {
     virtual ~RTSIB_event() {}
     virtual void process() = 0;
+    virtual void process_through_lua() { process(); }
 };
 
 extern std::mutex g_mt;

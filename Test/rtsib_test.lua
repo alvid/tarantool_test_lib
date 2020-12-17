@@ -7,7 +7,7 @@
 data_dir = "data"
 
 box.cfg({
-    log_level    = 7
+    log_level    = 5
     --, log        = 'rtsib_test_log.txt'
     , wal_dir    = data_dir
     , memtx_dir  = data_dir
@@ -20,22 +20,31 @@ fiber = require("fiber")
 rtsib = require("rtsib")
 log = require("log")
 
---rpc = require("RemoteInstanceConnection").RemoteInstanceConnection("127.0.0.1:3302")
+rpc = require("RemoteInstanceConnection").RemoteInstanceConnection("127.0.0.1:3302")
 
 orderNum = 0
 
+function onRequestToRunFiber(requestId)
+    print("onRequestToRunFiber("..tostring(requestId)..") called")
+    fiber.create(
+        function(requestId)
+            fiber.self():name("onRequestFiber_" .. tostring(requestId))
+            print(fiber.self():name() .. ": run")
+            rtsib.run_request_fiber(requestId)
+            print(fiber.self():name() .. ": end")
+        end
+        , requestId)
+    print("onRequestToRunFiber("..tostring(requestId)..") return")
+end
+
 function onRequestSync(request)
     print("onRequestSync("..tostring(request)..") called")
-    return request + 1000
+    return request
 end
 
 function onRequestFiber(request)
-    print("onRequestFiber("..tostring(request)..") called")
-    orderNum = orderNum + 1
-
-    local n = orderNum
-    local name = "rtsib_test: onRequestFiber #" .. tostring(n)
-    print(name .. ": run(" .. request .. ")")
+    local name = "rtsib_test: onRequestFiber #" .. tostring(request)
+    print(name .. ": run")
 
     local f = fiber.new(function()
         print(name .. ": fiber run")
@@ -52,13 +61,12 @@ function onRequestFiber(request)
 end
 
 function onRequestFiberCond(request)
-    --print("onRequestFiberCond("..tostring(request)..") called")
-
     local name = "rtsib_test: onRequestFiberCond #" .. tostring(request)
     print(name .. ": run(" .. request .. ")")
     local fc = fiber.cond()
 
     local f = fiber.create(function()
+        fiber.self():name(name)
         print(name .. ": fiber run")
         fiber.sleep(0)
         fc:signal()
@@ -77,7 +85,6 @@ function onRequestFiberCond(request)
     return request
 end
 
----crashes
 function onRequestPcall(request)
     print("onRequestPcall("..tostring(request)..") called")
     orderNum = orderNum + 1
@@ -86,17 +93,41 @@ function onRequestPcall(request)
     local productOfferingId = "POserv--5"
     local data = rpc:callFunction("API.ProductCatalog.getProductOffering", productOfferingId)
     
-    return n
+    return request
 end
 
 --rtsib.create_server("trnl", "onRequestSync") -- all's good
 --rtsib.create_server("trnl", "onRequestFiber") -- all's good
-rtsib.create_server("trnl", "onRequestFiberCond")
+rtsib.create_server("trnl", "onRequestFiberCond") -- not all's good, see log :(
 --rtsib.create_server("trnl", "onRequestPcall") -- all's good
 
-disp_fiber = fiber.create(function ()
+disp_fiber = fiber.create(function()
+    fiber.self():name("run_dispatcher_fiber")
     rtsib.run_dispatcher_fiber()
 end)
+
+-- Добавление данного кода приводит к тому, что последний запущенный файбер С остается навсегда в статусе "running"
+local f = {}
+fr = {}
+for i=1,5 do
+    f[i] = fiber.new(function(i)
+        local rc = onRequestFiberCond(i*100)
+        fr[i] = rc
+        return rc
+    end, i)
+    f[i]:name("fiber#"..tostring(i))
+    f[i]:set_joinable(true)
+end
+print("fibers are run")
+for i=1,5 do
+    local res, rc = f[i]:join()
+    if res then
+        print(string.format("fiber[%d] returns %d, wait %d", i, fr[i], i*100))
+    else
+        print(string.format("fiber[%d] fails, wait %d", i, i*100))
+    end
+end
+print("fibers are completed")
 
 require("console").start()
 os.exit()

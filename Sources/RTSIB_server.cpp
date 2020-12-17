@@ -11,15 +11,24 @@
 
 RTSIB_Server *g_rtsib_server = nullptr;
 
-int create_server(lua_State *lua)
+int create_server(lua_State *state)
 {
-    std::string port_type(luaL_checkstring(lua, 1));
-    std::string callback(luaL_checkstring(lua, 2));
+    std::string port_type(luaL_checkstring(state, 1));
+    std::string callback(luaL_checkstring(state, 2));
     say_info("luartsib: create_server('%s', '%s')", port_type.c_str(), callback.c_str());
     //for debug purposes only
     if (g_rtsib_server == nullptr) {
         g_rtsib_server = new RTSIB_Server(port_type, callback);
     }
+    return 0;
+}
+
+int run_request_fiber(lua_State *state)
+{
+    int request_id = luaL_checkinteger(state, 1);
+    printf("run_request_fiber_%d: run", request_id);
+    g_rtsib_server->on_incoming_request(state, request_id);
+    printf("run_request_fiber_%d: end", request_id);
     return 0;
 }
 
@@ -63,23 +72,45 @@ int RTSIB_Server::on_incoming_request()
     std::shared_ptr<Incoming_request> cur_event;
     cur_event.swap(fc.event);
 
-    auto L = luaT_state();
+    auto state = luaT_state();
 
-    lua_getglobal(L, lua_callback.c_str());
-    lua_pushnumber(L, cur_event->request_id);
+    lua_getglobal(state, lua_callback.c_str());
+    lua_pushnumber(state, cur_event->request_id);
     printf("RTSIB_Server::on_incoming_request(event = %p): >> call %s(%d)\n",
            cur_event.get(), lua_callback.c_str(), cur_event->request_id);
-    auto rc = lua_pcall(L, 1, 1, 0);
+    auto rc = luaT_call(state, 1, 1); // lua_pcall(L, 1, 1, 0);
     if (rc) {
-        fprintf(stderr, "error running function '%s': %s\n", lua_callback.c_str(), lua_tostring(L, -1));
-        lua_pop(L, 1);
+        fprintf(stderr, "error running function '%s': %s\n", lua_callback.c_str(), lua_tostring(state, -1));
+        lua_pop(state, 1);
+        return -1;
+        //return luaT_error(state);
+    }
+    assert(lua_isnumber(state, -1));
+    auto response_id = lua_tointeger(state, -1);
+    printf("RTSIB_Server::on_incoming_request(event = %p): << %s() return %d, wait %d\n",
+           cur_event.get(), lua_callback.c_str(), response_id, cur_event->request_id);
+    lua_pop(state, 1);
+
+    return 0;
+}
+
+int RTSIB_Server::on_incoming_request(lua_State *state, int request_id)
+{
+    lua_getglobal(state, lua_callback.c_str());
+    lua_pushnumber(state, request_id);
+    printf("RTSIB_Server::on_incoming_request(): >> call %s(%d)\n",
+           lua_callback.c_str(), request_id);
+    auto rc = lua_pcall(state, 1, 1, 0);
+    if (rc) {
+        fprintf(stderr, "error running function '%s': %s\n", lua_callback.c_str(), lua_tostring(state, -1));
+        lua_pop(state, 1);
         return -1;
     }
-    assert(lua_isnumber(L, -1));
-    auto response_id = lua_tointeger(L, -1);
-    printf("RTSIB_Server::on_incoming_request(event = %p): << %s() return %d, wait %d\n",
-            cur_event.get(), lua_callback.c_str(), response_id, cur_event->request_id);
-    lua_pop(L, 1);
+    assert(lua_isnumber(state, -1));
+    auto response_id = lua_tointeger(state, -1);
+    printf("RTSIB_Server::on_incoming_request(): << %s() return %d, wait %d\n",
+           lua_callback.c_str(), response_id, request_id);
+    lua_pop(state, 1);
 
     return 0;
 }
@@ -102,13 +133,35 @@ Incoming_request::Incoming_request(RTSIB_Server *a_server, void *a_msg, unsigned
 void Incoming_request::process()
 {
     rtsib_server->set_context_event(shared_from_this());
-    auto f = fiber_new("rtsib_server_callback", rtsib_server_callback_f);
-    if (f) {
-        fiber_start(f, rtsib_server);
+    std::string name = "rtsib_server_callback_" + std::to_string(request_id);
+    _fiber = fiber_new(name.c_str(), rtsib_server_callback_f);
+    if (_fiber) {
+        fiber_start(_fiber, rtsib_server);
     }
 }
 
 Incoming_request::~Incoming_request()
 {
     printf("Incoming_request::dtor(%d) = %p\n", request_id, this);
+}
+
+void Incoming_request::process_through_lua()
+{
+    auto state = luaT_state();
+
+    std::string lua_callback = "onRequestToRunFiber";
+
+    lua_getglobal(state, lua_callback.c_str());
+    lua_pushinteger(state, request_id);
+    printf("Incoming_request::process_through_lua(event = %p): >> call %s(%d)\n",
+           this, lua_callback.c_str(), request_id);
+    auto rc = lua_pcall(state, 1, 0, 0);
+    if (rc) {
+        fprintf(stderr, "error running function '%s': %s\n",
+                lua_callback.c_str(), lua_tostring(state, -1));
+        lua_pop(state, 1);
+        return;
+    }
+    printf("Incoming_request::process_through_lua(event = %p): << %s()\n",
+           this, lua_callback.c_str());
 }

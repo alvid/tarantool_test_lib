@@ -12,7 +12,8 @@
 #include "tarantool/module.h"
 #include "Dispatcher_fiber.hpp"
 
-extern int create_server(lua_State *lua);
+extern int create_server(lua_State *state);
+extern int run_request_fiber(lua_State *state);
 
 class RTSIB_Server;
 
@@ -21,10 +22,12 @@ struct Incoming_request : RTSIB_event, std::enable_shared_from_this<Incoming_req
     ~Incoming_request();
 
     void process() override;
+    void process_through_lua() override;
 
     RTSIB_Server *rtsib_server {nullptr};
     void *msg {nullptr};
     unsigned int request_id {0};
+    fiber *_fiber {nullptr};
 };
 
 class RTSIB_Callback {
@@ -42,6 +45,7 @@ public:
 
     void set_context_event(std::shared_ptr<Incoming_request> const& ev);
     int on_incoming_request();
+    int on_incoming_request(lua_State *state, int request_id);
 
 private:
     std::string port_type;

@@ -14,9 +14,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_SKIP_BUILD_RPATH true)
 set(ENABLE_TESTING ON)
-set(RBUILD_PATH ~/rbuild/integration)
-
-add_definitions(-DRHEL7)
 
 add_compile_options("-std=gnu++17")
 

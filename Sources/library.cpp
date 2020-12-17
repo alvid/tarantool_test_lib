@@ -14,12 +14,13 @@ extern "C" {
 static const struct luaL_Reg rtsib_export[] = {
         { "create_server", create_server },
         { "run_dispatcher_fiber", run_dispatcher_fiber },
+        { "run_request_fiber", run_request_fiber },
         { nullptr, nullptr }
 };
 
-int luaopen_rtsib(lua_State *lua)
+int luaopen_rtsib(lua_State *state)
 {
-    luaL_newlib(lua, rtsib_export);
+    luaL_newlib(state, rtsib_export);
     return 1;
 }
 

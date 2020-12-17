@@ -4,9 +4,9 @@
 //
 
 #include <queue>
-#include <cstdlib>
 #include <thread>
 #include <chrono>
+#include <cassert>
 
 #include "lua.hpp"
 #include "tarantool/module.h"
@@ -35,27 +35,18 @@ int run_dispatcher_fiber(lua_State *lua)
     say_info("started");
 
     g_signal = eventfd(0, 0);
-    if (g_signal < 0) {
-        throw std::runtime_error(std::string("Error happens while call eventfd() - ")
-            .append(strerror(errno)));
-    }
+    assert(g_signal > 0);
 
     ///tbd: for debug purposes only
     int req_id = 100;
     {
-        auto m1 = std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id);
-        auto m2 = std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id);
-        auto m3 = std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id);
+        std::lock_guard lock(g_mt);
 
-        {
-            std::lock_guard lock(g_mt);
+        g_mq.push_back(std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id));
+        g_mq.push_back(std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id));
+        g_mq.push_back(std::make_shared<Incoming_request>(g_rtsib_server, nullptr, ++req_id));
 
-            g_mq.push_back(m1);
-            g_mq.push_back(m2);
-            g_mq.push_back(m3);
-
-            eventfd_write(g_signal, 1ULL);
-        }
+        eventfd_write(g_signal, 1ULL);
     }
     ///tbd: for debug purposes only
 
@@ -87,7 +78,15 @@ int run_dispatcher_fiber(lua_State *lua)
 
             while (!q.empty()) {
                 auto msg = q.front();
-                msg->process();
+
+                //TODO: использование файберов в С приводит к непредсказуемым эффектам:
+                // 1) результат вызова Lua-функции с асинхронным поведением не в ту функцию С (не тот файбер), которая ждет ее окончания на lua_pcall
+                // 2) при параллельном создании файберов в Lua, последний созданный файбер С зависает и не возвращает управления (см. rtsib_test.lua)
+                //msg->process();   // для создания файбера-обработчика сообщения из-под C
+
+                //FIXME: создание файберов в Lua решает проблемы
+                msg->process_through_lua(); // для создания файбера-обработчика сообщения из-под Lua
+
                 q.pop_front();
             }
 
